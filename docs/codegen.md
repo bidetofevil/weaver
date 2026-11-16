@@ -206,6 +206,7 @@ templates:
 - `stable_only: true` - Only include stable attributes
 - `exclude_deprecated: true` - Skip deprecated attributes  
 - `exclude_root_namespace` - Exclude specific namespaces
+- `exclude_imported: true` - Skip definitions from a dependency, keeping only those the registry defines itself (v2 only)
 
 ### The `ctx` Variable
 

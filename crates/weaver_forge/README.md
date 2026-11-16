@@ -541,6 +541,27 @@ templates:
 All the `semconv_grouped_<...>` functions are the composition of two functions:
 `semconv_<...>` and `semconv_group_<...>_by_root_namespace`.
 
+For a v2 registry, these functions also accept `exclude_imported`. With
+`"exclude_imported": true`, the output holds only what the registry defines itself, without
+the definitions it gets from a dependency, such as the signals it pulls in with `imports:`.
+A definition from a dependency names it in `provenance.source`. Set it when generating a
+registry's documentation, so the registry's pages don't document a dependency's signals as
+its own:
+
+```yaml
+templates:
+  - template: metrics.md.j2
+    filter: >
+      semconv_grouped_metrics({
+        "v2": true,
+        "exclude_imported": true
+      })
+    application_mode: each
+```
+
+It applies to top-level definitions only: a signal the registry defines keeps every attribute
+it references, wherever that attribute is defined. It is off by default.
+
 > Note: JQ is a language for querying and transforming structured data. For more
 > information, see [JQ Manual](https://jqlang.github.io/jq/manual/). The
 > integration into Weaver is done through the Rust library `jaq`, which is a

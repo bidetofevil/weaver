@@ -2007,6 +2007,104 @@ mod tests {
         assert_eq!(result, expected);
     }
 
+    /// `exclude_imported` keeps only the definitions a v2 registry defines itself, in
+    /// every collection. A local signal keeps the dependency attributes it references.
+    #[test]
+    fn test_run_filter_raw_semconv_exclude_imported_v2() {
+        let dependency = serde_json::json!({ "source": "https://example.com/upstream/1.0.0" });
+        let input = serde_json::json!({
+            "registry": {
+                "attributes": [
+                    { "key": "app.session.id", "stability": "stable" },
+                    { "key": "shared.id", "stability": "stable", "provenance": dependency }
+                ],
+                "spans": [
+                    {
+                        "type": "app.request",
+                        "stability": "stable",
+                        "attributes": [
+                            { "key": "app.session.id", "stability": "stable" },
+                            { "key": "shared.id", "stability": "stable", "provenance": dependency }
+                        ]
+                    },
+                    { "type": "shared.request", "stability": "stable", "provenance": dependency }
+                ],
+                "metrics": [
+                    { "name": "app.request.duration", "stability": "stable" },
+                    // Imported into the registry's own namespace, so only provenance tells it apart.
+                    { "name": "app.upstream.count", "stability": "stable", "provenance": dependency }
+                ],
+                "events": [
+                    { "name": "app.started", "stability": "stable" },
+                    { "name": "shared.started", "stability": "stable", "provenance": dependency }
+                ],
+                "entities": [
+                    { "type": "app.service", "stability": "stable" },
+                    { "type": "shared.host", "stability": "stable", "provenance": dependency }
+                ]
+            }
+        });
+        let ids = |filter: &str, id_field: &str| -> Vec<String> {
+            run_filter_raw(&input, filter)
+                .unwrap_or_else(|e| panic!("failed to run `{filter}`: {e}"))
+                .as_array()
+                .expect("filter should return an array")
+                .iter()
+                .map(|definition| definition[id_field].as_str().unwrap_or_default().to_owned())
+                .collect()
+        };
+
+        // Each helper, the field that identifies its definitions, and its local and imported ids.
+        let cases = [
+            ("semconv_attributes", "key", "app.session.id", "shared.id"),
+            ("semconv_spans", "type", "app.request", "shared.request"),
+            (
+                "semconv_metrics",
+                "name",
+                "app.request.duration",
+                "app.upstream.count",
+            ),
+            ("semconv_events", "name", "app.started", "shared.started"),
+            ("semconv_entities", "type", "app.service", "shared.host"),
+        ];
+        for (helper, id_field, local, imported) in cases {
+            assert_eq!(
+                ids(
+                    &format!("{helper}({{\"v2\": true, \"exclude_imported\": true}})"),
+                    id_field
+                ),
+                [local],
+                "{helper} with exclude_imported"
+            );
+            assert_eq!(
+                ids(
+                    &format!("{helper}({{\"v2\": true, \"exclude_imported\": false}})"),
+                    id_field
+                ),
+                [local, imported],
+                "{helper} with exclude_imported false"
+            );
+            assert_eq!(
+                ids(&format!("{helper}({{\"v2\": true}})"), id_field),
+                [local, imported],
+                "{helper} by default"
+            );
+        }
+
+        let spans = run_filter_raw(
+            &input,
+            "semconv_spans({\"v2\": true, \"exclude_imported\": true})",
+        )
+        .expect("failed to run semconv_spans for v2");
+        let span_attribute_keys: Vec<&str> = spans[0]["attributes"]
+            .as_array()
+            .expect("span should keep its attributes")
+            .iter()
+            .map(|attribute| attribute["key"].as_str().unwrap_or_default())
+            .collect();
+        assert_eq!(span_attribute_keys, ["app.session.id", "shared.id"]);
+    }
+
     #[test]
     fn test_auto_escape_modes() {
         use minijinja::{AutoEscape, Environment};

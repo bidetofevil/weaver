@@ -131,6 +131,18 @@ def deprecated_filter($options):
     .
   end;
 
+# Filters out the definitions a v2 registry imports from a dependency, keeping only
+# those it defines itself. A definition from a dependency names it in `provenance.source`;
+# a local one has no `source`.
+# $options is an object that can contain:
+# - exclude_imported: a boolean to exclude definitions from a dependency. False by default.
+def imported_filter($options):
+  if ($options | has("exclude_imported") and $options.exclude_imported == true) then
+    map(select(.provenance.source == null))
+  else
+    .
+  end;
+
 #####################
 # Attribute functions
 #####################
@@ -143,9 +155,11 @@ def deprecated_filter($options):
 # - stable_only: a boolean to exclude all non-stable attributes.
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable attributes instead.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations.
+# - exclude_imported: a boolean to exclude attributes from a dependency, keeping only those the registry defines itself. v2 only.
 def semconv_attributes($options):
   if ($options | has("v2") and $options.v2 == true) then
       .registry.attributes
+      | imported_filter($options)
       | map(. + {root_namespace: .key | split(".")[0]})
   else
       .groups
@@ -175,6 +189,7 @@ def semconv_attributes: semconv_attributes({});
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable attributes instead.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude attributes from a dependency, keeping only those the registry defines itself. v2 only.
 def semconv_grouped_attributes($options):
     semconv_attributes($options)
     | semconv_group_attributes_by_root_namespace;
@@ -194,10 +209,12 @@ def semconv_grouped_attributes: semconv_grouped_attributes({});
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable signals instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_signal($signal; $options):
   if ($options | has("v2") and $options.v2 == true) then
     .registry
     | signal_filter_v2($signal)
+    | imported_filter($options)
     | map(. + {root_namespace: get_id($signal; .) | split(".")[0]})
   else
     .groups
@@ -236,6 +253,7 @@ def semconv_group_metrics_by_root_namespace:
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable metrics instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_metrics($options): semconv_signal("metric"; $options) | sort_by(get_metric_name(.));
 
 # Convenience function to extract all metrics without any filtering options.
@@ -249,6 +267,7 @@ def semconv_metrics: semconv_metrics({});
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable metrics instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_grouped_metrics($options): semconv_metrics($options) | semconv_group_metrics_by_root_namespace;
 
 # Convenience function to group all metrics by their root namespace without any filtering options.
@@ -268,6 +287,7 @@ def semconv_group_spans_by_root_namespace:
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable spans instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_spans($options): semconv_signal("span"; $options) | sort_by(.type);
 
 # Convenience function to extract all spans without any filtering options.
@@ -281,6 +301,7 @@ def semconv_spans: semconv_spans({});
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable spans instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_grouped_spans($options): semconv_spans($options) | semconv_group_spans_by_root_namespace;
 
 # Convenience function to group all spans by their root namespace without any filtering options.
@@ -300,6 +321,7 @@ def semconv_group_events_by_root_namespace:
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable events instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_events($options): semconv_signal("event"; $options) | sort_by(.name);
 
 # Convenience function to extract all events without any filtering options.
@@ -313,6 +335,7 @@ def semconv_events: semconv_events({});
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable events instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_grouped_events($options): semconv_events($options) | semconv_group_events_by_root_namespace;
 
 # Convenience function to group all events by their root namespace without any filtering options.
@@ -332,6 +355,7 @@ def semconv_group_entities_by_root_namespace:
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable entities instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_entities($options): semconv_signal("entity"; $options) | sort_by(.type);
 
 # Convenience function to extract all entities without any filtering options.
@@ -345,6 +369,7 @@ def semconv_entities: semconv_entities({});
 # - exclude_stability: a list of stability statuses to exclude. Use `stable_only` to exclude all non-stable entities instead. Applies to nested attributes as well.
 # - ignore_code_generation_annotations: a boolean to ignore code generation annotations. Applies to signals and nested attributes.
 # - v2: a boolean to use v2 schema.
+# - exclude_imported: a boolean to exclude signals imported from a dependency, keeping only those the registry defines itself. v2 only. Does not apply to nested attributes.
 def semconv_grouped_entities($options): semconv_entities($options) | semconv_group_entities_by_root_namespace;
 
 # Convenience function to group all entities by their root namespace without any filtering options.
